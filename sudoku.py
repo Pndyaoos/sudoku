@@ -31,45 +31,18 @@ class Cell(object):
         self.column.update_excludes()
         self.box.update_excludes()
 
-class Line(object):
+class Group(object):
+    """
+    A group of 9 values, this could be a box or a line
+    """
     def __init__(self, cells=None):
         self.cells = cells if cells is not None else []
 
     def solve(self):
         """
-        Look for cells in this line that must have a certain value
+        Look for cells in this group that must have a certain value
 
-        For all the unsolved cells in the line, go over each value and
-        if the value can go in that cell, and cannot go in all other
-        cells then that cell must contain that value
-        """
-
-        for index in range(9):
-            others = [i for i in range(9) if i != index]
-            for value in range(1,10):
-                # If the cell is not already solved
-                if not self.cells[index].solved:
-                    # If this cell cannot hold this value, continue to next
-                    # value
-                    if value in self.cells[index].excludes:
-                        continue
-                    # If all other cells cannot hold this value, this cell
-                    # must be this value. Break and go to next index
-                    if all([value in self.cells[other].excludes
-                            for other in others]):
-                        self.cells[index].set_value(value)
-                        break
-
-
-class Box(object):
-    def __init__(self, cells=None):
-        self.cells = cells if cells is not None else []
-
-    def solve(self):
-        """
-        Look for cells that must have a certain value.
-
-        For all the unsolved cells in the box, go over each value and
+        For all the unsolved cells in the group, go over each value and
         if the value can go in that cell, and cannot go in all other
         cells then that cell must contain that value
         """
@@ -92,7 +65,7 @@ class Box(object):
 
     def update_excludes(self):
         """
-        Update all the cells in this box based on the solved values
+        Update all the cells in this group based on the solved values
         """
 
         # collect solved values
@@ -106,13 +79,14 @@ class Box(object):
         for index in range(9):
             self.cells[index].excludes.update(solved_values)
 
+
 class Grid(object):
     def __init__(self):
         self.cells = [Cell() for _ in range(81)]
-        self.rows = [Line(cells=self.cells[i*9:(i*9)+8]) for i in range(9)]
-        self.columns = [Line(cells=self.cells[i:81:9]) for i in range(9)]
+        self.rows = [Group(cells=self.cells[i*9:(i*9)+8]) for i in range(9)]
+        self.columns = [Group(cells=self.cells[i:81:9]) for i in range(9)]
         self.boxes = [
-            Box(cells=
+            Group(cells=
                 [self.cells[i], self.cells[i+1], self.cells[i+2],
                  self.cells[i+9], self.cells[i+10], self.cells[i+11],
                  self.cells[i+18], self.cells[i+19], self.cells[i+20]]
