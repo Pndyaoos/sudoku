@@ -3,37 +3,30 @@ Module for solving Sudoku Puzzles
 """
 
 class Cell(object):
-    def __init__(self, value=None):
+    def __init__(self, index, value=None):
+        self.index = index
         self.solved = False
         self.excludes = set()
-        self.value = value if value is not None else -1
-        self.row = None
-        self.column = None
-        self.box = None
+        self.value = value if value is not None else " "
+        self.groups = []
 
-    def exclude(self):
-        # add all values in parent row, column and box to the excluded set
-        pass
-
-    def set_value(self, value, update_parents=True):
+    def set_value(self, value, update_groups=True):
         """
         Set the value of this cell and update cells in parent boxes, rows
         and coulmuns
         """
-
         self.solved = True
         self.value = value
-        if update_parents:
-            self.update_parents()
+        if update_groups:
+            self.update_groups()
 
-    def update_parents(self):
-        self.row.update_excludes()
-        self.column.update_excludes()
-        self.box.update_excludes()
+    def update_groups(self):
+        for group in self.groups:
+            group.update_excludes()
 
 class Group(object):
     """
-    A group of 9 values, this could be a box or a line
+    A group of 9 values. Represents columns, rows and boxes.
     """
     def __init__(self, cells=None):
         self.cells = cells if cells is not None else []
@@ -46,7 +39,7 @@ class Group(object):
         if the value can go in that cell, and cannot go in all other
         cells then that cell must contain that value
         """
-
+        solved_cell = False
         for index in range(9):
             others = [i for i in range(9) if i != index]
             for value in range(1,10):
@@ -58,32 +51,40 @@ class Group(object):
                         continue
                     # If all other cells cannot hold this value, this cell
                     # must be this value. Break and go to next index
+                    # print index, value, others, len(self.cells)
                     if all([value in self.cells[other].excludes
                             for other in others]):
                         self.cells[index].set_value(value)
+                        solved_cell = True
                         break
+        return solved_cell
 
     def update_excludes(self):
         """
         Update all the cells in this group based on the solved values
         """
-
         # collect solved values
         solved_values = set()
-        for index in range(9):
-            cell = self.cells[index]
+        for cell in self.cells:
             if cell.solved:
                 solved_values.add(cell.value)
 
         # Update the cells with found values
-        for index in range(9):
-            self.cells[index].excludes.update(solved_values)
+        for cell in self.cells:
+            cell.excludes.update(solved_values)
+
+    def reference_group_to_cells(self):
+        """
+        Add a reference to this group for all the cells it contains
+        """
+        for cell in self.cells:
+            cell.groups.append(self)
 
 
 class Grid(object):
     def __init__(self):
-        self.cells = [Cell() for _ in range(81)]
-        self.rows = [Group(cells=self.cells[i*9:(i*9)+8]) for i in range(9)]
+        self.cells = [Cell(index) for index in range(81)]
+        self.rows = [Group(cells=self.cells[i*9:(i*9)+9]) for i in range(9)]
         self.columns = [Group(cells=self.cells[i:81:9]) for i in range(9)]
         self.boxes = [
             Group(cells=
@@ -92,49 +93,117 @@ class Grid(object):
                  self.cells[i+18], self.cells[i+19], self.cells[i+20]]
                  ) for i in [0,3,6,27,30,33,54,57,60]
             ]
-
+        for row in self.rows:
+            row.reference_group_to_cells()
+        for column in self.columns:
+            column.reference_group_to_cells()
+        for box in self.boxes:
+            box.reference_group_to_cells()
 
     def set_test_data(self):
         for i in range(81):
-            self.cells[i].set_value(i, update_parents=False)
+            self.cells[i].set_value(i, update_groups=False)
 
+    def set_data_from_list(self, values):
+        """
+        Initiate all the cell values from a list
+        """
+        for index, value in enumerate(values):
+            if value:
+                self.cells[index].set_value(value, update_groups=False)
 
     def display(self):
         for row in range(9):
             print "|".join(["{0:2}".format(self.cells[(row*9)+i].value) for i in range(9)])
 
+    def fill_excludes(self):
+        for cell in self.cells:
+            cell.update_groups()
+
+    def solve(self, limit=None):
+        solved_cell = True
+        for _ in range(10):
+            solved_cell = False
+            for row in grid.rows:
+                solved_cell = row.solve() or solved_cell
+            for column in grid.columns:
+                solved_cell = column.solve() or solved_cell
+            for box in grid.boxes:
+                solved_cell = box.solve() or solved_cell
+            print solved_cell
+
 
 def experiments():
+
+    easy_puzzle = [
+        0, 2, 0,  1, 7, 8,  0, 3, 0,
+        0, 4, 0,  3, 0, 2,  0, 9, 0,
+        1, 0, 0,  0, 0, 0,  0, 0, 6,
+
+        0, 0, 8,  6, 0, 3,  5, 0, 0,
+        3, 0, 0,  0, 0, 0,  0, 0, 4,
+        0, 0, 6,  7, 0, 9,  2, 0, 0,
+
+        9, 0, 0,  0, 0, 0,  0, 0, 2,
+        0, 8, 0,  9, 0, 1,  0, 6, 0,
+        0, 1, 0,  4, 3, 6,  0, 5, 0
+        ]
+
     grid = Grid()
-    grid.set_test_data()
+    # grid.set_test_data()
+    grid.set_data_from_list(easy_puzzle)
+    grid.fill_excludes()
 
-    print grid.cells[0].value
-    print grid.rows[0].cells[0].value
-    print grid.columns[0].cells[0].value
-    print grid.boxes[0].cells[0].value
-
-    grid.cells[0].value = 99
-
-    print grid.cells[0].value
-    print grid.rows[0].cells[0].value
-    print grid.columns[0].cells[0].value
-    print grid.boxes[0].cells[0].value
-
-    grid.columns[0].cells[0].value = 999
-
-    print grid.cells[0].value
-    print grid.rows[0].cells[0].value
-    print grid.columns[0].cells[0].value
-    print grid.boxes[0].cells[0].value
-
-    print grid.cells[42].value
-    print grid.rows[4].cells[6].value
-    print grid.columns[6].cells[4].value
-    print grid.boxes[5].cells[3].value
-
-    grid.boxes[0].cells[0].value = 0
+    # for row in grid.rows:
+    #     print len(row.cells)
+    # for column in grid.columns:
+    #     print len(column.cells)
+    # for box in grid.boxes:
+    #     print len(box.cells)
 
     grid.display()
+
+    grid.solve()
+
+    grid.display()
+
+    # print grid.cells[0].value
+    # print grid.rows[0].cells[0].value
+    # print grid.columns[0].cells[0].value
+    # print grid.boxes[0].cells[0].value
+
+    # grid.cells[0].value = 99
+
+    # print grid.cells[0].value
+    # print grid.rows[0].cells[0].value
+    # print grid.columns[0].cells[0].value
+    # print grid.boxes[0].cells[0].value
+
+    # grid.columns[0].cells[0].value = 999
+
+    # print grid.cells[0].value
+    # print grid.rows[0].cells[0].value
+    # print grid.columns[0].cells[0].value
+    # print grid.boxes[0].cells[0].value
+
+    # print grid.cells[42].value
+    # print grid.rows[4].cells[6].value
+    # print grid.columns[6].cells[4].value
+    # print grid.boxes[5].cells[3].value
+    # print grid.cells[42].groups[2].cells[3].value
+    # print grid.cells[42].groups[0].cells[6].value
+    # print grid.cells[42].groups[1].cells[4].value
+    # grid.cells[42].groups[1].cells[4].value = -1
+    # print grid.cells[42].value
+    # print grid.rows[4].cells[6].value
+    # print grid.columns[6].cells[4].value
+    # print grid.boxes[5].cells[3].value
+    # print grid.cells[42].groups[2].cells[3].value
+    # print grid.cells[42].groups[0].cells[6].value
+    # print grid.cells[42].groups[1].cells[4].value
+    # grid.boxes[0].cells[0].value = " "
+
+    # grid.display()
 
     # unsolved_cell_indices = [1,2,3]
     # unsolved_values = [4,5,6]
