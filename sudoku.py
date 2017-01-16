@@ -17,6 +17,7 @@ class Cell(object):
         """
         self.solved = True
         self.value = value
+        self.excludes = set(range(1,10)).difference(set([value]))
         if update_groups:
             self.update_groups()
 
@@ -40,21 +41,21 @@ class Group(object):
         cells then that cell must contain that value
         """
         solved_cell = False
-        for index in range(9):
+        for index, cell in enumerate(self.cells):
             others = [i for i in range(9) if i != index]
             for value in range(1,10):
                 # If the cell is not already solved
-                if not self.cells[index].solved:
+                if not cell.solved:
                     # If this cell cannot hold this value, continue to next
                     # value
-                    if value in self.cells[index].excludes:
+                    if value in cell.excludes:
                         continue
                     # If all other cells cannot hold this value, this cell
                     # must be this value. Break and go to next index
                     # print index, value, others, len(self.cells)
-                    if all([value in self.cells[other].excludes
-                            for other in others]):
-                        self.cells[index].set_value(value)
+                    if all([value in self.cells[other].excludes for other in others]):
+                        cell.set_value(value)
+                        cell.update_groups()
                         solved_cell = True
                         break
         return solved_cell
@@ -79,6 +80,11 @@ class Group(object):
         """
         for cell in self.cells:
             cell.groups.append(self)
+
+    def print_summary(self):
+        for cell in self.cells:
+            print "index: {0:2}, value: {1}, solved: {2!s:5}, excludes: {3}".format(
+                cell.index, cell.value, cell.solved, cell.excludes)
 
 
 class Grid(object):
@@ -113,8 +119,25 @@ class Grid(object):
                 self.cells[index].set_value(value, update_groups=False)
 
     def display(self):
-        for row in range(9):
-            print "|".join(["{0:2}".format(self.cells[(row*9)+i].value) for i in range(9)])
+        # for row in range(9):
+        #     print "|".join(["{0:2}".format(self.cells[(row*9)+i].value) for i in range(9)])
+
+        row_pattern = "|{0} {1} {2}|{3} {4} {5}|{6} {7} {8}|"
+        seperator_pattern = "+-----+-----+-----+"
+
+        print seperator_pattern
+        print row_pattern.format(*[self.rows[0].cells[i].value for i in range(9)])
+        print row_pattern.format(*[self.rows[1].cells[i].value for i in range(9)])
+        print row_pattern.format(*[self.rows[2].cells[i].value for i in range(9)])
+        print seperator_pattern
+        print row_pattern.format(*[self.rows[3].cells[i].value for i in range(9)])
+        print row_pattern.format(*[self.rows[4].cells[i].value for i in range(9)])
+        print row_pattern.format(*[self.rows[5].cells[i].value for i in range(9)])
+        print seperator_pattern
+        print row_pattern.format(*[self.rows[6].cells[i].value for i in range(9)])
+        print row_pattern.format(*[self.rows[7].cells[i].value for i in range(9)])
+        print row_pattern.format(*[self.rows[8].cells[i].value for i in range(9)])
+        print seperator_pattern
 
     def fill_excludes(self):
         for cell in self.cells:
@@ -124,11 +147,11 @@ class Grid(object):
         solved_cell = True
         for _ in range(10):
             solved_cell = False
-            for row in grid.rows:
+            for row in self.rows:
                 solved_cell = row.solve() or solved_cell
-            for column in grid.columns:
+            for column in self.columns:
                 solved_cell = column.solve() or solved_cell
-            for box in grid.boxes:
+            for box in self.boxes:
                 solved_cell = box.solve() or solved_cell
             print solved_cell
 
@@ -162,6 +185,11 @@ def experiments():
     #     print len(box.cells)
 
     grid.display()
+
+    # grid.boxes[5].print_summary()
+    # grid.boxes[5].solve()
+    # print ""
+    # grid.boxes[5].print_summary()
 
     grid.solve()
 
