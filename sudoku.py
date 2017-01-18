@@ -11,6 +11,7 @@ class Cell(object):
         self.box = None
         self.column = None
         self.row = None
+        self.dirty = True
 
     def set_value(self, value, update_siblings=True):
         """
@@ -93,6 +94,15 @@ class Group(object):
         # every column intersects 3 boxes and 9 rows
         # every cell is in one box, row and column
 
+    def naked_subset(self):
+        pass
+        http://www.sudokuwiki.org/Naked_Candidates
+        for cell in unsolved cells:
+            n = number of candidates for this cell
+            if exactly n cells (including this cell) have the same candidate set in this group: ()
+                (remove the candidates from) / (add candidates to excludes) the other unsolved cells
+
+
     def update_excludes(self):
         """
         Update all the cells in this group based on the solved values
@@ -140,6 +150,7 @@ class Box(Group):
                 if line is None:
                     continue
                 else:
+                    # should do a check here to see if it's really a state change.
                     for cell in [cell for cell in line.cells if cell.box is not self]:
                         cell.add_excludes(set([value]))
                         state_changed = True
@@ -327,7 +338,7 @@ def experiments():
     grid.display()
     grid.solve()
     grid.display()
-    
+
     grid.print_summary()
 
     # grid.boxes[5].print_summary()
