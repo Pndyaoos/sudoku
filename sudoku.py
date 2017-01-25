@@ -2,6 +2,8 @@
 Module for solving Sudoku Puzzles
 """
 
+from itertools import combinations
+
 class Cell(object):
     def __init__(self, index, value=None):
         self.index = index
@@ -19,6 +21,7 @@ class Cell(object):
         Set the value of this cell and update cells in parent boxes, rows
         and coulmuns
         """
+        print "Solved {0} as {1}".format(self.index, value)
         self.solved = True
         self.value = value
         self.excludes = set(range(1,10)).difference(set([value]))
@@ -44,9 +47,8 @@ class Cell(object):
             self.dirty = True
 
     def trivial_solve(self):
-        if (len(self.excludes) == 8) and (not self.solved):
-            self.set_value(set(range(1,10)).difference(self.excludes).pop())
-            print "Solved {0} as {1}".format(self.index, self.value)
+        if (len(self.candidates) == 1) and (not self.solved):
+            self.set_value(list(self.candidates)[0])
 
     def get_summary(self):
         return "in: {0:2}, va: {1}, so: {2!s:5}, exc: {3}".format(
@@ -58,35 +60,6 @@ class Group(object):
     """
     def __init__(self, cells=None):
         self.cells = cells if cells is not None else []
-
-    def exclusion_solve(self):
-        """
-        Look for cells in this group that must have a certain value
-
-        For all the unsolved cells in the group, go over each value and
-        if the value can go in that cell, and cannot go in all other
-        cells then that cell must contain that value
-        """
-        solved_cell = False
-        for cell in self.get_unsolved_cells():
-            for value in self.get_unsolved_values():
-                # If this cell cannot hold this value, continue to next
-                # value
-                if value in cell.excludes:
-                    continue
-                # If all other cells cannot hold this value, this cell
-                # must be this value. Break and go to next index
-                if all([value in other.excludes for other in self.cells if other is not cell]):
-                    cell.set_value(value)
-                    solved_cell = True
-                    print "Solved {0} as {1}".format(cell.index, value)
-                    break
-        return solved_cell
-
-        # every box intersects 3 rows and 3 columns
-        # every row intersects 3 boxes and 9 columns
-        # every column intersects 3 boxes and 9 rows
-        # every cell is in one box, row and column
 
     def get_unsolved_values(self):
         """
@@ -122,6 +95,65 @@ class Group(object):
     def print_summary(self):
         for cell in self.cells:
             print cell.get_summary()
+
+    def exclusion_solve(self):
+        """
+        Look for cells in this group that must have a certain value
+
+        For all the unsolved cells in the group, go over each value and
+        if the value can go in that cell, and cannot go in all other
+        cells then that cell must contain that value
+        """
+        for cell in self.get_unsolved_cells():
+            for value in self.get_unsolved_values():
+                # If this cell cannot hold this value, continue to next
+                # value
+                if value in cell.excludes:
+                    continue
+                # If all other cells cannot hold this value, this cell
+                # must be this value. Break and go to next index
+                if all([value in other.excludes for other in self.cells if other is not cell]):
+                    cell.set_value(value)
+                    break
+
+    def naked_pair_exclude(self):
+        """
+        If two unsolved cells both have exactly 2 candidates and those
+        candidate pairs are the same, then all other unsolved cells in
+        this group cannot have those values as candidates
+
+        http://www.sudokuwiki.org/Naked_Candidates
+        """
+
+        pair_pool = [cell for cell in self.get_unsolved_cells() if
+            len(cell.candidates) == 2]
+        if len(pair_pool) >= 2:
+            for a, b in combinations(pair_pool, 2):
+                if a.candidates == b.candidates:
+                    for cell in self.get_unsolved_cells():
+                        if (cell is not a) and (cell is not b):
+                            print "pair exclude: {0} and {1}".format(a.index, b.index)
+                            cell.add_excludes(a.candidates)
+
+    def naked_triple_exclude(self):
+        """
+        http://www.sudokuwiki.org/Naked_Candidates
+        
+        If the union of candidates of 3 unsolved cells is of size 3 then
+        all other unsolved cells cannot have any of the elements of this union
+        as candidates
+        """
+
+        triple_pool = self.get_unsolved_cells()
+        if len(triple_pool) >= 3:
+            for a, b, c in combinations(triple_pool, 3):
+                union = a.candidates.union(b.candidates.union(c.candidates))
+                if len(union) == 3:
+                    for cell in self.get_unsolved_cells():
+                        if (cell is not a) and (cell is not b) and (cell is not c):
+                            print "Triple exclude: {0} and {1} and {2}".format(a.index, b.index, c.index)
+                            cell.add_excludes(union)
+
 
     # def naked_subset(self):
     #     pass
@@ -167,10 +199,10 @@ class Box(Group):
             first = unsolved_cells[0]
             line = None
             if all(cell.row is first.row for cell in unsolved_cells[1:]):
-                line = cell.row
+                line = first.row
             if line is None:
                 if all(cell.column is first.column for cell in unsolved_cells[1:]):
-                    line = cell.column
+                    line = first.column
             if line is not None:
                 for cell in [cell for cell in line.cells if cell.box is not self]:
                     cell.add_excludes(self.get_unsolved_values())
@@ -180,10 +212,10 @@ class Line(Group):
     """
     9 cells in a line
     """
-    pass
-    # def single_box_exclude(self):
+    def single_box_exclude(self):
     #     # If the unsolved 2 or 3 cells in this line are in a single box:
     #     # Add the candidate values to the excludes of the other cells in the box/
+        pass
 
 class Row(Line):
     """
@@ -219,6 +251,7 @@ class Grid(object):
                  self.cells[i+18], self.cells[i+19], self.cells[i+20]]
                  ) for i in [0,3,6,27,30,33,54,57,60]
             ]
+        self.groups = self.columns + self.rows + self.boxes
         for row in self.rows:
             row.reference_group_to_cells()
         for column in self.columns:
@@ -277,12 +310,8 @@ class Grid(object):
                 self.cells[row*9 + 8].get_summary())
 
     def fill_excludes(self):
-        for row in self.rows:
-            row.update_excludes()
-        for column in self.columns:
-            column.update_excludes()
-        for box in self.boxes:
-            box.update_excludes()
+        for group in self.groups:
+            group.update_excludes()
 
     def solve(self, limit=5):
         state_updated = True
@@ -293,12 +322,11 @@ class Grid(object):
             runs += 1
             for cell in self.cells:
                 cell.trivial_solve()
-            for row in self.rows:
-                row.exclusion_solve()
-            for column in self.columns:
-                column.exclusion_solve()
+            for group in self.groups:
+                group.exclusion_solve()
+                group.naked_pair_exclude()
+                group.naked_triple_exclude()
             for box in self.boxes:
-                box.exclusion_solve()
                 box.single_line_exclusion()
 
     def any_dirty_cells(self):
@@ -369,6 +397,21 @@ def experiments():
         0, 0, 0,  0, 0, 0,  0, 0, 0,
         0, 0, 0,  0, 0, 0,  0, 0, 0
         ]
+
+    triple_test = [
+        2, 9, 4,  5, 1, 3,  0, 0, 6,
+        6, 0, 0,  8, 4, 2,  3, 1, 9,
+        3, 0, 0,  6, 9, 7,  2, 5, 4,
+
+        0, 0, 0,  0, 5, 6,  0, 0, 0,
+        0, 4, 0,  0, 8, 0,  0, 6, 0,
+        0, 0, 0,  4, 7, 0,  0, 0, 0,
+
+        7, 3, 0,  1, 6, 4,  0, 0, 5,
+        9, 0, 0,  7, 3, 5,  0, 0, 1,
+        4, 0, 0,  9, 2, 8,  6, 3, 7
+        ]
+
 
     grid = Grid()
     # grid.set_test_data()
@@ -486,3 +529,8 @@ experiments()
         #     7: [0,1],
         #     8: [0,1]
         #     }
+
+        # every box intersects 3 rows and 3 columns
+        # every row intersects 3 boxes and 9 columns
+        # every column intersects 3 boxes and 9 rows
+        # every cell is in one box, row and column
