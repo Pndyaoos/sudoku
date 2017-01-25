@@ -158,28 +158,23 @@ class Box(Group):
             cell.box = self
 
     def single_line_exclusion(self):
-        # for unsolved values in box:
-        #     if all possible cells for current value are in a single row/column:
-        #         cells in that row/column not in this box cannot hold current value, otherwise the value couldnt be in this box
-        #         add current value to the excludes of those cells
+        # If all unsolved cells in this box are in a single line
+        #   unsolved cells in that line not in this box cannot be any of the unsolved values in this box - otherwise the value couldnt be in this box
+        #   add unsolved values to excludes of other cells in that line
 
-        for value in set(range(1,10)).difference(set([cell.value for cell in self.cells if cell.solved])):
-            available_cells = [cell for cell in self.cells if (value not in cell.excludes) and (not cell.solved)]
-            if len(available_cells) > 1:
-                line = None
-                row = available_cells[0].row
-                if all([cell.row is row for cell in available_cells[1:]]):
-                    line = row
-                if line is None:
-                    column = available_cells[0].column
-                    if all([cell.column is column for cell in available_cells[1:]]):
-                        line = column
-                if line is None:
-                    continue
-                else:
-                    # should do a check here to see if it's really a state change.
-                    for cell in [cell for cell in line.cells if cell.box is not self]:
-                        cell.add_excludes(set([value]))
+        unsolved_cells = self.get_unsolved_cells()
+        if len(unsolved_cells) in [2,3]:
+            first = unsolved_cells[0]
+            line = None
+            if all(cell.row is first.row for cell in unsolved_cells[1:]):
+                line = cell.row
+            if line is None:
+                if all(cell.column is first.column for cell in unsolved_cells[1:]):
+                    line = cell.column
+            if line is not None:
+                for cell in [cell for cell in line.cells if cell.box is not self]:
+                    cell.add_excludes(self.get_unsolved_values())
+
 
 class Line(Group):
     """
