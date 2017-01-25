@@ -99,8 +99,22 @@ class Group(object):
         http://www.sudokuwiki.org/Naked_Candidates
         for cell in unsolved cells:
             n = number of candidates for this cell
+            matches = 1
+            for other in other_unsloved:
+                if other.candidate_set == cell.candidate_set:
+                    matches +=1
+            # if exactly n cells (including this cell) have the same candidate set in this group: ()
+            if matches == n:
+
             if exactly n cells (including this cell) have the same candidate set in this group: ()
                 (remove the candidates from) / (add candidates to excludes) the other unsolved cells
+
+
+
+        u = number of unsolved cells
+        if u < 2:
+            return
+        for s in range(2,u+1)
 
 
     def update_excludes(self):
@@ -156,8 +170,12 @@ class Box(Group):
                         state_changed = True
         return state_changed
 
+class Line(Group):
+    def single_box_exclude(self):
+        # If the unsolved 2 or 3 cells in this line are in a single box:
+        # Add the candidate values to the excludes of the other cells in the box/
 
-class Row(Group):
+class Row(Line):
     def reference_group_to_cells(self):
         """
         Add a reference to this row for all the cells it contains
@@ -165,7 +183,7 @@ class Row(Group):
         for cell in self.cells:
             cell.row = self
 
-class Column(Group):
+class Column(Line):
     def reference_group_to_cells(self):
         """
         Add a reference to this column for all the cells it contains
