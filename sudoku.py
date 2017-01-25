@@ -7,11 +7,12 @@ class Cell(object):
         self.index = index
         self.solved = False
         self.excludes = set()
+        self.candidates = set(range(1,10))
         self.value = value if value is not None else " "
         self.box = None
         self.column = None
         self.row = None
-        self.dirty = True
+        self.dirty = False
 
     def set_value(self, value, update_siblings=True):
         """
@@ -21,6 +22,8 @@ class Cell(object):
         self.solved = True
         self.value = value
         self.excludes = set(range(1,10)).difference(set([value]))
+        self.candidates = set([value])
+        self.dirty = True
         if update_siblings:
             self.update_siblings()
 
@@ -33,21 +36,17 @@ class Cell(object):
         """
         Update the values that this cell cannot be, must be a set
         """
-
-        if self.solved:
-            return
-        else:
+        # print self.excludes, excluded_vals
+        # print not excluded_vals.issubset(self.excludes)
+        if not self.solved and not excluded_vals.issubset(self.excludes):
             self.excludes.update(excluded_vals)
+            self.candidates = set(range(1,10)).difference(self.excludes)
+            self.dirty = True
 
     def trivial_solve(self):
         if (len(self.excludes) == 8) and (not self.solved):
-            self.value = set(range(1,10)).difference(self.excludes).pop()
-            self.solved = True
-            self.update_siblings()
+            self.set_value(set(range(1,10)).difference(self.excludes).pop())
             print "Solved {0} as {1}".format(self.index, self.value)
-            return True
-        else:
-            return False
 
     def get_summary(self):
         return "in: {0:2}, va: {1}, so: {2!s:5}, exc: {3}".format(
@@ -55,7 +54,7 @@ class Cell(object):
 
 class Group(object):
     """
-    A group of 9 values. Base class for columns, rows and boxes.
+    A group of 9 values.
     """
     def __init__(self, cells=None):
         self.cells = cells if cells is not None else []
@@ -69,24 +68,19 @@ class Group(object):
         cells then that cell must contain that value
         """
         solved_cell = False
-        for index, cell in enumerate(self.cells):
-            others = [i for i in range(9) if i != index]
-            for value in range(1,10):
-                # If the cell is not already solved
-                if not cell.solved:
-                    # If this cell cannot hold this value, continue to next
-                    # value
-                    if value in cell.excludes:
-                        continue
-                    # If all other cells cannot hold this value, this cell
-                    # must be this value. Break and go to next index
-                    # print index, value, others, len(self.cells)
-                    if all([value in self.cells[other].excludes for other in others]):
-                        cell.set_value(value)
-                        cell.update_siblings()
-                        solved_cell = True
-                        print "Solved {0} as {1}".format(cell.index, value)
-                        break
+        for cell in self.get_unsolved_cells():
+            for value in self.get_unsolved_values():
+                # If this cell cannot hold this value, continue to next
+                # value
+                if value in cell.excludes:
+                    continue
+                # If all other cells cannot hold this value, this cell
+                # must be this value. Break and go to next index
+                if all([value in other.excludes for other in self.cells if other is not cell]):
+                    cell.set_value(value)
+                    solved_cell = True
+                    print "Solved {0} as {1}".format(cell.index, value)
+                    break
         return solved_cell
 
         # every box intersects 3 rows and 3 columns
@@ -94,48 +88,68 @@ class Group(object):
         # every column intersects 3 boxes and 9 rows
         # every cell is in one box, row and column
 
-    def naked_subset(self):
-        pass
-        http://www.sudokuwiki.org/Naked_Candidates
-        for cell in unsolved cells:
-            n = number of candidates for this cell
-            matches = 1
-            for other in other_unsloved:
-                if other.candidate_set == cell.candidate_set:
-                    matches +=1
-            # if exactly n cells (including this cell) have the same candidate set in this group: ()
-            if matches == n:
+    def get_unsolved_values(self):
+        """
+        Get the set of values that still need to be solved for this group
+        """
+        return set(range(1,10)).difference(self.get_solved_values())
 
-            if exactly n cells (including this cell) have the same candidate set in this group: ()
-                (remove the candidates from) / (add candidates to excludes) the other unsolved cells
+    def get_solved_values(self):
+        """
+        Get the set of values that have been solved for this group
+        """
+        return set([cell.value for cell in self.get_solved_cells()])
 
+    def get_unsolved_cells(self):
+        """
+        Get the unsolved cells in this group
+        """
+        return [cell for cell in self.cells if not cell.solved]
 
-
-        u = number of unsolved cells
-        if u < 2:
-            return
-        for s in range(2,u+1)
-
+    def get_solved_cells(self):
+        """
+        Get the solved cells in this group
+        """
+        return [cell for cell in self.cells if cell.solved]
 
     def update_excludes(self):
         """
         Update all the cells in this group based on the solved values
         """
-        # collect solved values
-        solved_values = set()
         for cell in self.cells:
-            if cell.solved:
-                solved_values.add(cell.value)
-
-        # Update the cells with found values
-        for cell in self.cells:
-            cell.add_excludes(solved_values)
+            cell.add_excludes(self.get_solved_values())
 
     def print_summary(self):
         for cell in self.cells:
             print cell.get_summary()
 
+    # def naked_subset(self):
+    #     pass
+    #     http://www.sudokuwiki.org/Naked_Candidates
+    #     for cell in unsolved cells:
+    #         n = number of candidates for this cell
+    #         matches = 1
+    #         for other in other_unsloved:
+    #             if other.candidate_set == cell.candidate_set:
+    #                 matches +=1
+    #         # if exactly n cells (including this cell) have the same candidate set in this group: ()
+    #         if matches == n:
+
+    #         if exactly n cells (including this cell) have the same candidate set in this group: ()
+    #             (remove the candidates from) / (add candidates to excludes) the other unsolved cells
+
+
+
+    #     u = number of unsolved cells
+    #     if u < 2:
+    #         return
+    #     for s in range(2,u+1)
+
+
 class Box(Group):
+    """
+    A 3x3 set of cells
+    """
     def reference_group_to_cells(self):
         """
         Add a reference to this box for all the cells it contains
@@ -149,7 +163,6 @@ class Box(Group):
         #         cells in that row/column not in this box cannot hold current value, otherwise the value couldnt be in this box
         #         add current value to the excludes of those cells
 
-        state_changed = False
         for value in set(range(1,10)).difference(set([cell.value for cell in self.cells if cell.solved])):
             available_cells = [cell for cell in self.cells if (value not in cell.excludes) and (not cell.solved)]
             if len(available_cells) > 1:
@@ -167,15 +180,20 @@ class Box(Group):
                     # should do a check here to see if it's really a state change.
                     for cell in [cell for cell in line.cells if cell.box is not self]:
                         cell.add_excludes(set([value]))
-                        state_changed = True
-        return state_changed
 
 class Line(Group):
-    def single_box_exclude(self):
-        # If the unsolved 2 or 3 cells in this line are in a single box:
-        # Add the candidate values to the excludes of the other cells in the box/
+    """
+    9 cells in a line
+    """
+    pass
+    # def single_box_exclude(self):
+    #     # If the unsolved 2 or 3 cells in this line are in a single box:
+    #     # Add the candidate values to the excludes of the other cells in the box/
 
 class Row(Line):
+    """
+    A horizontal line of cells
+    """
     def reference_group_to_cells(self):
         """
         Add a reference to this row for all the cells it contains
@@ -184,6 +202,9 @@ class Row(Line):
             cell.row = self
 
 class Column(Line):
+    """
+    A vertical line of cells
+    """
     def reference_group_to_cells(self):
         """
         Add a reference to this column for all the cells it contains
@@ -261,25 +282,39 @@ class Grid(object):
                 self.cells[row*9 + 8].get_summary())
 
     def fill_excludes(self):
-        for cell in self.cells:
-            cell.update_siblings()
+        for row in self.rows:
+            row.update_excludes()
+        for column in self.columns:
+            column.update_excludes()
+        for box in self.boxes:
+            box.update_excludes()
 
     def solve(self, limit=5):
         state_updated = True
         runs = 0
-        while state_updated and runs < limit:
-            state_updated = False
+        while runs < limit and self.any_dirty_cells():
+            print runs
+            self.clean_all_cells()
             runs += 1
             for cell in self.cells:
-                state_updated = cell.trivial_solve() or state_updated
+                cell.trivial_solve()
             for row in self.rows:
-                state_updated = row.exclusion_solve() or state_updated
+                row.exclusion_solve()
             for column in self.columns:
-                state_updated = column.exclusion_solve() or state_updated
+                column.exclusion_solve()
             for box in self.boxes:
-                state_updated = box.exclusion_solve() or state_updated
-                state_updated = box.single_line_exclusion() or state_updated
-            print state_updated
+                box.exclusion_solve()
+                box.single_line_exclusion()
+
+    def any_dirty_cells(self):
+        for cell in self.cells:
+            if cell.dirty:
+                return True
+        return False
+
+    def clean_all_cells(self):
+        for cell in self.cells:
+            cell.dirty = False
 
 
 def experiments():
@@ -343,6 +378,8 @@ def experiments():
     grid = Grid()
     # grid.set_test_data()
     grid.set_data_from_list(hard_puzzle)
+    grid.print_summary()
+
     grid.fill_excludes()
 
 
