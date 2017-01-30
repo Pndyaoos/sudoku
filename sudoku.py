@@ -49,10 +49,15 @@ class Cell(object):
     def trivial_solve(self):
         if (len(self.candidates) == 1) and (not self.solved):
             self.set_value(list(self.candidates)[0])
-
+# exc: 12345678
+# in:  0 va:   so: False exc:          can: 123456789
     def get_summary(self):
-        return "in: {0:2}, va: {1}, so: {2!s:5}, exc: {3}".format(
-            self.index, self.value, self.solved, self.excludes)
+        return "in: {0:2} va: {1} so: {2!s:5} exc: {3:8} can: {4:8}".format(
+            self.index,
+            self.value,
+            self.solved,
+            "".join(map(str, self.excludes)),
+            "".join(map(str, self.candidates)))
 
 class Group(object):
     """
@@ -116,66 +121,39 @@ class Group(object):
                     cell.set_value(value)
                     break
 
-    def naked_pair_exclude(self):
+    def naked_n_exclude(self, size):
         """
-        If two unsolved cells both have exactly 2 candidates and those
-        candidate pairs are the same, then all other unsolved cells in
-        this group cannot have those values as candidates
+        Use the Naked group solve looking for the given size
 
         http://www.sudokuwiki.org/Naked_Candidates
+
+        If the union of candidates of size unsolved cells is of has size
+        elements then all other unsolved cells cannot have any of the
+        elements of this union as candidates
         """
-
-        pair_pool = [cell for cell in self.get_unsolved_cells() if
-            len(cell.candidates) == 2]
-        if len(pair_pool) >= 2:
-            for a, b in combinations(pair_pool, 2):
-                if a.candidates == b.candidates:
-                    for cell in self.get_unsolved_cells():
-                        if (cell is not a) and (cell is not b):
-                            print "pair exclude: {0} and {1}".format(a.index, b.index)
-                            cell.add_excludes(a.candidates)
-
-    def naked_triple_exclude(self):
-        """
-        http://www.sudokuwiki.org/Naked_Candidates
-        
-        If the union of candidates of 3 unsolved cells is of size 3 then
-        all other unsolved cells cannot have any of the elements of this union
-        as candidates
-        """
-
-        triple_pool = self.get_unsolved_cells()
-        if len(triple_pool) >= 3:
-            for a, b, c in combinations(triple_pool, 3):
-                union = a.candidates.union(b.candidates.union(c.candidates))
-                if len(union) == 3:
-                    for cell in self.get_unsolved_cells():
-                        if (cell is not a) and (cell is not b) and (cell is not c):
-                            print "Triple exclude: {0} and {1} and {2}".format(a.index, b.index, c.index)
-                            cell.add_excludes(union)
-
-
-    # def naked_subset(self):
-    #     pass
-    #     http://www.sudokuwiki.org/Naked_Candidates
-    #     for cell in unsolved cells:
-    #         n = number of candidates for this cell
-    #         matches = 1
-    #         for other in other_unsloved:
-    #             if other.candidate_set == cell.candidate_set:
-    #                 matches +=1
-    #         # if exactly n cells (including this cell) have the same candidate set in this group: ()
-    #         if matches == n:
-
-    #         if exactly n cells (including this cell) have the same candidate set in this group: ()
-    #             (remove the candidates from) / (add candidates to excludes) the other unsolved cells
-
-
-
-    #     u = number of unsolved cells
-    #     if u < 2:
-    #         return
-    #     for s in range(2,u+1)
+        pool = self.get_unsolved_cells()
+        # If there are as many or more unsolved cells than the desired naked
+        # group size
+        if pool >= size:
+            # Get all the ways you can pick size cells out of the pool
+            for combo in combinations(pool, size):
+                # Get all the candidates that are common to all the cells in
+                # this combo
+                common = combo[0].candidates
+                for cell in combo[1:]:
+                    common = common.union(cell.candidates)
+                # If there are the same number of common candidates as there
+                # are cells in the naked grou size
+                if len(common) == size:
+                    # Add the common elements to all the unsolved cells not in 
+                    # the naked group
+                    for other in self.get_unsolved_cells():
+                        if all([other is not cell for cell in combo]):
+                            print "{0} exclude: {1}".format(
+                                size, " and ".join(
+                                [str(cell.index) for cell in combo]))
+                            print [str(cell.index) + ", " + str(cell.candidates) + ":" for cell in combo]
+                            other.add_excludes(common)
 
 
 class Box(Group):
@@ -296,15 +274,15 @@ class Grid(object):
         for row in range(9):
             if row %3 == 0:
                 print "-"
-            print "{0:65}{1:65}{2}".format(
+            print "{0:54}{1:54}{2}".format(
                 self.cells[row*9].get_summary(),
                 self.cells[row*9 + 3].get_summary(),
                 self.cells[row*9 + 6].get_summary())
-            print "{0:65}{1:65}{2}".format(
+            print "{0:54}{1:54}{2}".format(
                 self.cells[row*9 + 1].get_summary(),
                 self.cells[row*9 + 4].get_summary(),
                 self.cells[row*9 + 7].get_summary())
-            print "{0:65}{1:65}{2}".format(
+            print "{0:54}{1:54}{2}".format(
                 self.cells[row*9 + 2].get_summary(),
                 self.cells[row*9 + 5].get_summary(),
                 self.cells[row*9 + 8].get_summary())
@@ -324,8 +302,8 @@ class Grid(object):
                 cell.trivial_solve()
             for group in self.groups:
                 group.exclusion_solve()
-                group.naked_pair_exclude()
-                group.naked_triple_exclude()
+                for size in [2,3,4]:
+                    group.naked_n_exclude(size)
             for box in self.boxes:
                 box.single_line_exclusion()
 
@@ -412,14 +390,29 @@ def experiments():
         4, 0, 0,  9, 2, 8,  6, 3, 7
         ]
 
+    quad_test = [
+        0, 0, 0,  0, 3, 0,  0, 8, 6,
+        0, 0, 0,  0, 2, 0,  0, 4, 0,
+        0, 9, 0,  0, 7, 8,  5, 2, 0,
+
+        3, 7, 1,  8, 5, 6,  2, 9, 4,
+        9, 0, 0,  1, 4, 2,  3, 7, 5,
+        4, 0, 0,  3, 9, 7,  6, 1, 8,
+
+        2, 0, 0,  7, 0, 3,  8, 5, 9,
+        0, 3, 9,  2, 0, 5,  4, 6, 7,
+        7, 0, 0,  9, 0, 4,  1, 3, 2
+        ]
 
     grid = Grid()
     # grid.set_test_data()
-    grid.set_data_from_list(hard_puzzle)
+    grid.set_data_from_list(quad_test)
     grid.print_summary()
 
     grid.fill_excludes()
-
+    grid.print_summary()
+    grid.boxes[0].naked_n_exclude(4)
+    grid.print_summary()
 
     # for row in grid.rows:
     #     print len(row.cells)
@@ -428,11 +421,11 @@ def experiments():
     # for box in grid.boxes:
     #     print len(box.cells)
 
-    grid.display()
-    grid.solve()
-    grid.display()
+    #grid.display()
+    #grid.solve()
+    #grid.display()
 
-    grid.print_summary()
+    # grid.print_summary()
 
     # grid.boxes[5].print_summary()
     # grid.boxes[5].solve()
